@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iARK RMT 作战指挥室</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue.js 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Inter"', '"Noto Sans SC"', 'sans-serif'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        .pulse-border { animation: pulse-red 2s infinite; }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(225, 29, 72, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); }
+        }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col overflow-hidden">
+
+<div id="app" class="flex flex-col h-screen">
+
+    <!-- 1. 顶部导航栏 -->
+    <header class="glass-panel sticky top-0 z-50 px-6 py-3 flex items-center justify-between shadow-xl shrink-0">
+        <div class="flex items-center gap-4">
+            <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-white leading-tight">iARK RMT <span class="text-indigo-400">作战指挥室</span></h1>
+                <p class="text-[10px] text-slate-400 font-medium tracking-widest uppercase">Project War Room</p>
+            </div>
+        </div>
+
+        <!-- 视图切换 Tabs -->
+        <nav class="flex bg-slate-900/80 p-1 rounded-lg border border-slate-700/50">
+            <button v-for="tab in tabs" :key="tab.id"
+                @click="currentTab = tab.id" 
+                :class="['px-5 py-2 rounded-md text-sm font-semibold transition-all flex items-center gap-2', currentTab === tab.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800']">
+                <span>{{ tab.icon }}</span>
+                {{ tab.name }}
+            </button>
+        </nav>
+
+        <!-- 数据管理 -->
+        <div class="flex gap-2">
+            <input type="file" ref="fileInput" @change="importJSON" class="hidden" accept=".json">
+            <button @click="$refs.fileInput.click()" class="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 rounded border border-transparent hover:border-slate-600 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                导入数据
+            </button>
+            <button @click="exportJSON" class="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 rounded border border-transparent hover:border-slate-600 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                导出备份
+            </button>
+        </div>
+    </header>
+
+    <!-- 2. 主内容区域 -->
+    <main class="flex-1 overflow-y-auto p-6 scroll-smooth bg-gradient-to-b from-slate-900 to-slate-950">
+        
+        <!-- ======================= 视图 1: 重点项目跟踪 ======================= -->
+        <div v-if="currentTab === 'tracker'" class="space-y-6 animate-fade-in">
+            <div class="flex justify-between items-end mb-2">
+                <h2 class="text-lg font-bold text-white border-l-4 border-indigo-500 pl-3">重点项目状态看板</h2>
+                <button @click="openProjectModal(true)" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded text-sm font-bold shadow-lg flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> 新增项目
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                <div v-for="(project, index) in projects" :key="index" 
+                     class="group bg-slate-800/40 rounded-xl border transition-all duration-200 hover:bg-slate-800/80 hover:shadow-xl hover:-translate-y-1 backdrop-blur-sm"
+                     :class="[
+                        getStatusBorderColor(project.status),
+                        hasCriticalBlocker(project) ? 'border-l-[6px] border-l-rose-500' : 'border-l-[6px]'
+                     ]">
+                    
+                    <!-- Header -->
+                    <div class="p-4 border-b border-slate-700/40 flex justify-between items-start">
+                        <div class="flex-1 min-w-0 pr-2">
+                            <div class="flex items-center gap-2 mb-1.5">
+                                <span v-if="project.priority === 'P0'" class="px-1.5 py-0.5 rounded text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">P0</span>
+                                <span v-else class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">P1</span>
+                                <h3 class="text-base font-bold text-white truncate cursor-pointer hover:text-indigo-300" @click="editProject(index)">{{ project.name }}</h3>
+                            </div>
+                            <div class="text-xs text-slate-400 flex items-center gap-1 truncate" title="Owner">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                {{ project.owner }}
+                            </div>
+                        </div>
+                        
+                        <!-- Status Traffic Light -->
+                        <button @click.stop="toggleProjectStatus(project)" class="flex flex-col items-center gap-1 group-hover:scale-105 transition-transform">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center shadow-inner border border-slate-900/50" :class="getStatusDotColor(project.status)">
+                                <div class="w-3 h-3 bg-white rounded-full opacity-30 animate-pulse" v-if="project.status === 'risk' || project.status === 'blocked'"></div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="p-4 space-y-3">
+                        <!-- Progress -->
+                        <div>
+                            <div class="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                <span>Progress</span>
+                                <span :class="project.progress === 100 ? 'text-emerald-400' : 'text-slate-300'">{{ project.progress }}%</span>
+                            </div>
+                            <div class="w-full bg-slate-700/50 rounded-full h-1.5">
+                                <div class="h-1.5 rounded-full transition-all duration-700" :class="getProgressColor(project.status)" :style="{ width: project.progress + '%' }"></div>
+                            </div>
+                        </div>
+
+                        <!-- Update -->
+                        <div class="bg-slate-900/30 p-2.5 rounded border border-slate-700/30 min-h-[60px]">
+                            <p class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">{{ project.weeklyUpdate || '暂无更新' }}</p>
+                        </div>
+
+                        <!-- Risks -->
+                        <div v-if="hasCriticalBlocker(project)" class="flex items-start gap-2 text-rose-300 bg-rose-950/20 p-2 rounded border border-rose-500/20 animate-pulse">
+                            <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                            <p class="text-xs font-medium">{{ project.risks }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================= 视图 2: Roadmap ======================= -->
+        <div v-if="currentTab === 'roadmap'" class="h-full flex flex-col animate-fade-in pb-10">
+            <h2 class="text-lg font-bold text-white mb-4 pl-3 border-l-4 border-indigo-500">2026 年度战略规划 (Editable)</h2>
+            
+            <div class="flex-1 grid grid-cols-4 gap-4 min-w-[1000px] overflow-x-auto">
+                <!-- Quarters -->
+                <div v-for="quarter in ['Q1', 'Q2', 'Q3', 'Q4']" :key="quarter" class="flex flex-col gap-3">
+                    <!-- Column Header -->
+                    <div class="bg-slate-800/80 p-3 rounded-t-lg border-b-2 border-indigo-500 text-center shadow-lg">
+                        <span class="text-lg font-black text-white block">{{ quarter }}</span>
+                    </div>
+
+                    <!-- Capability Track -->
+                    <div class="glass-card flex-1 rounded-lg p-3 flex flex-col gap-2 relative group">
+                        <div class="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1 flex justify-between items-center">
+                            🛡️ 能力补齐 (Biz)
+                            <button @click="openRoadmapModal(quarter, 'capability')" class="text-slate-500 hover:text-white opacity-0 group-hover:opacity-100 transition">+</button>
+                        </div>
+                        <div v-for="(item, idx) in roadmap[quarter].capability" :key="idx" 
+                             @click="editRoadmapItem(quarter, 'capability', idx)"
+                             class="bg-blue-900/20 border border-blue-500/20 p-2 rounded text-xs text-blue-100 cursor-pointer hover:bg-blue-900/40 hover:border-blue-400 transition">
+                            {{ item }}
+                        </div>
+                    </div>
+
+                    <!-- Experience Track -->
+                    <div class="glass-card flex-1 rounded-lg p-3 flex flex-col gap-2 relative group">
+                        <div class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1 flex justify-between items-center">
+                            ⚡ 体验优化 (UX)
+                            <button @click="openRoadmapModal(quarter, 'experience')" class="text-slate-500 hover:text-white opacity-0 group-hover:opacity-100 transition">+</button>
+                        </div>
+                        <div v-for="(item, idx) in roadmap[quarter].experience" :key="idx" 
+                             @click="editRoadmapItem(quarter, 'experience', idx)"
+                             class="bg-emerald-900/20 border border-emerald-500/20 p-2 rounded text-xs text-emerald-100 cursor-pointer hover:bg-emerald-900/40 hover:border-emerald-400 transition">
+                            {{ item }}
+                        </div>
+                    </div>
+
+                    <!-- AI Track -->
+                    <div class="glass-card flex-1 rounded-lg p-3 flex flex-col gap-2 relative group">
+                        <div class="text-[10px] font-bold text-purple-400 uppercase tracking-widest mb-1 flex justify-between items-center">
+                            🧠 AI Native
+                            <button @click="openRoadmapModal(quarter, 'ai')" class="text-slate-500 hover:text-white opacity-0 group-hover:opacity-100 transition">+</button>
+                        </div>
+                        <div v-for="(item, idx) in roadmap[quarter].ai" :key="idx" 
+                             @click="editRoadmapItem(quarter, 'ai', idx)"
+                             class="bg-purple-900/20 border border-purple-500/20 p-2 rounded text-xs text-purple-100 cursor-pointer hover:bg-purple-900/40 hover:border-purple-400 transition">
+                            {{ item }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================= 视图 3: Gap Matrix ======================= -->
+        <div v-if="currentTab === 'gap'" class="max-w-6xl mx-auto animate-fade-in pb-10">
+            <h2 class="text-lg font-bold text-white mb-6 pl-3 border-l-4 border-indigo-500">竞品差距分析矩阵 (vs Longbridge/Rockflow)</h2>
+            
+            <div class="bg-slate-800/50 rounded-xl overflow-hidden border border-slate-700 shadow-2xl backdrop-blur-sm">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-900/90 text-slate-400 uppercase text-xs font-bold tracking-wider border-b border-slate-700">
+                            <th class="p-4 w-1/4">评估维度 (点击编辑)</th>
+                            <th class="p-4 text-center w-[14%]">Q1 现状</th>
+                            <th class="p-4 text-center w-[14%]">Q2 目标</th>
+                            <th class="p-4 text-center w-[14%]">Q3 目标</th>
+                            <th class="p-4 text-center w-[14%]">Q4 愿景</th>
+                            <th class="p-4 text-center w-[14%] bg-slate-800/80 text-indigo-300">竞品标杆</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm divide-y divide-slate-700/50">
+                        <tr v-for="(row, idx) in gapMatrix" :key="idx" class="group hover:bg-slate-800/30 transition">
+                            <!-- Header -->
+                            <td class="p-4 font-bold text-white cursor-pointer hover:text-indigo-400" @click="editGapRowName(idx)">
+                                <div class="flex items-center gap-2">
+                                    {{ row.category }}
+                                    <svg class="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                </div>
+                            </td>
+                            
+                            <!-- Quarters -->
+                            <td v-for="q in ['q1', 'q2', 'q3', 'q4']" :key="q" 
+                                class="p-4 text-center cursor-pointer relative"
+                                @click="toggleGapStatus(row, q)">
+                                <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all select-none"
+                                     :class="getGapStatusStyle(row[q])">
+                                    <span class="w-2 h-2 rounded-full" :class="getGapDotColor(row[q])"></span>
+                                    <span class="font-bold text-xs">{{ getGapStatusLabel(row[q]) }}</span>
+                                </div>
+                                <div class="text-[10px] text-slate-600 mt-1 opacity-0 group-hover:opacity-100 transition">点击切换</div>
+                            </td>
+
+                            <!-- Benchmark -->
+                            <td class="p-4 text-center bg-slate-800/20 cursor-pointer" @click="toggleGapStatus(row, 'benchmark')">
+                                <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all select-none opacity-80"
+                                     :class="getGapStatusStyle(row.benchmark)">
+                                    <span class="w-2 h-2 rounded-full" :class="getGapDotColor(row.benchmark)"></span>
+                                    <span class="font-bold text-xs">{{ getGapStatusLabel(row.benchmark) }}</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-4 text-xs text-slate-500 flex gap-4 justify-end">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 bg-rose-500 rounded-full"></span> 落后</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 bg-amber-500 rounded-full"></span> 追赶中</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 bg-emerald-500 rounded-full"></span> 齐平/领先</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 bg-purple-500 rounded-full"></span> 行业壁垒</span>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ======================= MODALS ======================= -->
+
+    <!-- 1. Project Modal -->
+    <div v-if="modals.project.show" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div class="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 w-full max-w-2xl p-6">
+            <h3 class="text-xl font-bold text-white mb-6 border-b border-slate-800 pb-3">
+                {{ modals.project.isNew ? '新增项目' : '编辑项目' }}
+            </h3>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-2">
+                    <label class="text-xs text-slate-400">项目名称</label>
+                    <input v-model="modals.project.data.name" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400">Owner (Biz/Tech)</label>
+                    <input v-model="modals.project.data.owner" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400">状态 (RAG)</label>
+                    <select v-model="modals.project.data.status" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-indigo-500">
+                        <option value="normal">🟢 正常 (On Track)</option>
+                        <option value="risk">🟡 有风险 (At Risk)</option>
+                        <option value="blocked">🔴 严重阻塞 (Blocked)</option>
+                        <option value="completed">🔵 已完成 (Completed)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400">优先级</label>
+                    <select v-model="modals.project.data.priority" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-indigo-500">
+                        <option value="P0">P0 - 极高</option>
+                        <option value="P1">P1 - 高</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400">进度 (%)</label>
+                    <input type="number" v-model.number="modals.project.data.progress" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div class="col-span-2">
+                    <label class="text-xs text-slate-400">本周更新 (Update)</label>
+                    <textarea v-model="modals.project.data.weeklyUpdate" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+                <div class="col-span-2">
+                    <label class="text-xs text-slate-400">风险与卡点 (Risks)</label>
+                    <textarea v-model="modals.project.data.risks" rows="2" class="w-full bg-slate-800 border border-rose-900/50 rounded p-2 text-white focus:outline-none focus:border-rose-500" placeholder="若非绿灯状态，请必填"></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="modals.project.show = false" class="px-4 py-2 text-slate-400 hover:text-white">取消</button>
+                <button @click="saveProject" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Roadmap Item Modal -->
+    <div v-if="modals.roadmap.show" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div class="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 w-full max-w-lg p-6">
+            <h3 class="text-xl font-bold text-white mb-4">
+                {{ modals.roadmap.isNew ? '添加规划项' : '编辑规划项' }} 
+                <span class="text-sm font-normal text-slate-400 ml-2">({{ modals.roadmap.quarter }} - {{ getRoadmapLabel(modals.roadmap.category) }})</span>
+            </h3>
+            <div class="mb-4">
+                <label class="text-xs text-slate-400 block mb-1">内容描述 ([标题] 详情)</label>
+                <textarea v-model="modals.roadmap.text" rows="4" class="w-full bg-slate-800 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-indigo-500"></textarea>
+            </div>
+            <div class="flex justify-between mt-6">
+                <button v-if="!modals.roadmap.isNew" @click="deleteRoadmapItem" class="text-rose-500 hover:text-rose-400 text-sm font-bold">删除此项</button>
+                <div v-else></div>
+                <div class="flex gap-3">
+                    <button @click="modals.roadmap.show = false" class="px-4 py-2 text-slate-400 hover:text-white">取消</button>
+                    <button @click="saveRoadmapItem" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold">确认</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Gap Row Name Modal -->
+    <div v-if="modals.gap.show" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div class="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md p-6">
+            <h3 class="text-xl font-bold text-white mb-4">编辑维度名称</h3>
+            <input v-model="modals.gap.text" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white mb-4 focus:outline-none focus:border-indigo-500">
+            <div class="flex justify-end gap-3">
+                <button @click="modals.gap.show = false" class="px-4 py-2 text-slate-400 hover:text-white">取消</button>
+                <button @click="saveGapRowName" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold">保存</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const { createApp } = Vue;
+
+    createApp({
+        data() {
+            return {
+                currentTab: 'tracker',
+                tabs: [
+                    { id: 'tracker', name: '重点项目跟踪', icon: '🚀' },
+                    { id: 'roadmap', name: '2026 Roadmap', icon: '🗺️' },
+                    { id: 'gap', name: '差距分析矩阵', icon: '📊' }
+                ],
+                // ================= DATA MODELS =================
+                projects: [
+                    { name: "新加坡证券 (SG Launch)", priority: "P0", owner: "Ray/Rosita/胡中兴", status: "risk", progress: 85, weeklyUpdate: "技术研发基本完成，进入UAT。", risks: "RO人员入职滞后。" },
+                    { name: "香港融资业务 (Margin)", priority: "P0", owner: "Zoe/刘嘉俊/王纲", status: "normal", progress: 40, weeklyUpdate: "核心利息模块开发中。", risks: "" },
+                    { name: "App体验优化", priority: "P1", owner: "Gary/高赵辉", status: "normal", progress: 20, weeklyUpdate: "完成竞品调研，确定一键复购为速赢项。", risks: "" },
+                    { name: "AI项目 (Native)", priority: "P1", owner: "Gary/杨时恩", status: "risk", progress: 15, weeklyUpdate: "App 2.0视觉规范设计中。", risks: "Nexus与App改版资源需对齐。" },
+                    { name: "海外购买力建设", priority: "P1", owner: "Rosita/王纲", status: "normal", progress: 30, weeklyUpdate: "账户打通方案评审完成。", risks: "" },
+                    { name: "证券定投 (SIP)", priority: "P1", owner: "Gary/欧莹", status: "normal", progress: 10, weeklyUpdate: "PRD评审阶段。", risks: "" },
+                    { name: "债券项目", priority: "P2", owner: "Diana/Nancy", status: "normal", progress: 50, weeklyUpdate: "行情源对接测试中。", risks: "" },
+                    { name: "今日达 (Money Plus)", priority: "P1", owner: "欧莹/Nancy", status: "completed", progress: 100, weeklyUpdate: "已上线稳定运行。", risks: "" }
+                ],
+                roadmap: {
+                    Q1: {
+                        capability: ["[新加坡证券] 开户/入金/交易全链路", "[香港融资] 港美股融资上线"],
+                        experience: ["[开户简化] SG/HK缩减字段", "[一键复购入金] 首页快捷入口"],
+                        ai: ["[规划] 诺娅AI产品规划", "[交互] 交互层面改造", "[概念] App 2.0 VIS及Demo", "[试运行] 单场景上线", "[计划] 确定3个场景"]
+                    },
+                    Q2: {
+                        capability: ["[IPO融资] 新股打新", "[证券定投] 港美股/ETF定投", "[全委ETF] 私募全委交易", "[债券] 产品上线", "[全购买力Ph1] 现金+买港股"],
+                        experience: ["[资产视图] 7大分类/清晰化", "[货架清晰化] 导航重构", "[账户线上化] PI/税务/解冻断点消除", "[闭环优化] 公募/全委流程"],
+                        ai: ["[详情页AI化] 异动/财报", "[资产诊断] 持仓分析建议", "[资讯洞察] 舆情分析", "[一句话组合] 模拟下单", "[人性化] 性格/昵称"]
+                    },
+                    Q3: {
+                        capability: ["[美股期权] 行情与交易", "[Algo交易] 均价算法单", "[全购买力Ph2] 证券打通财富"],
+                        experience: ["[资讯改版] 观点即货架", "[可衡量] PV/UV看板", "[安卓上架] HK/SG渠道"],
+                        ai: ["[协作引擎] Nexus联动App", "[存续自动化] 报告推送", "[AI理财师] 复杂咨询"]
+                    },
+                    Q4: {
+                        capability: ["[多市场] 日/台股", "[数字货币] Hashkey", "[全购买力Ph3] 完全打通"],
+                        experience: ["[投资闭环] 私募/证券优化", "[One ID] 全球账户落地", "[资产页] 收益走势/归因"],
+                        ai: ["[交互减负] 一句话换汇/修资料", "[语音交易] 语义指令下单", "[任务DIY] 自定义盯盘"]
+                    }
+                },
+                gapMatrix: [
+                    { category: "基础交易体验", q1: "red", q2: "yellow", q3: "green", q4: "green", benchmark: "green" },
+                    { category: "衍生品与高阶能力", q1: "red", q2: "yellow", q3: "green", q4: "green", benchmark: "green" },
+                    { category: "AI 交互体验", q1: "yellow", q2: "green", q3: "green", q4: "star", benchmark: "yellow" },
+                    { category: "账户与资金效率", q1: "yellow", q2: "green", q3: "green", q4: "green", benchmark: "green" }
+                ],
+                // ================= MODAL STATES =================
+                modals: {
+                    project: { show: false, isNew: false, index: -1, data: {} },
+                    roadmap: { show: false, isNew: false, quarter: '', category: '', index: -1, text: '' },
+                    gap: { show: false, index: -1, text: '' }
+                }
+            }
+        },
+        methods: {
+            // --- Helper: Project Tracker ---
+            getStatusDotColor(status) {
+                const map = { normal: 'bg-emerald-500', risk: 'bg-amber-500', blocked: 'bg-rose-500', completed: 'bg-blue-500' };
+                return map[status];
+            },
+            getStatusBorderColor(status) {
+                const map = { normal: 'border-l-emerald-500', risk: 'border-l-amber-500', blocked: 'border-l-rose-500', completed: 'border-l-blue-500' };
+                return map[status];
+            },
+            getProgressColor(status) {
+                const map = { normal: 'bg-emerald-500', risk: 'bg-amber-500', blocked: 'bg-rose-500', completed: 'bg-blue-500' };
+                return map[status];
+            },
+            hasCriticalBlocker(p) {
+                return (p.status === 'risk' || p.status === 'blocked') && p.risks && p.risks.length > 0;
+            },
+            toggleProjectStatus(p) {
+                const states = ['normal', 'risk', 'blocked', 'completed'];
+                const next = states[(states.indexOf(p.status) + 1) % 4];
+                p.status = next;
+            },
+            openProjectModal(isNew, idx = -1) {
+                this.modals.project.isNew = isNew;
+                this.modals.project.index = idx;
+                this.modals.project.data = isNew 
+                    ? { name: "", priority: "P1", status: "normal", progress: 0, weeklyUpdate: "", risks: "", owner: "" }
+                    : { ...this.projects[idx] };
+                this.modals.project.show = true;
+            },
+            editProject(idx) { this.openProjectModal(false, idx); },
+            saveProject() {
+                if (this.modals.project.isNew) this.projects.unshift(this.modals.project.data);
+                else this.projects[this.modals.project.index] = this.modals.project.data;
+                this.modals.project.show = false;
+            },
+
+            // --- Helper: Roadmap ---
+            getRoadmapLabel(cat) {
+                const map = { ai: 'AI Native', experience: '体验优化', capability: '能力补齐' };
+                return map[cat];
+            },
+            openRoadmapModal(q, cat, idx = -1) {
+                const isNew = idx === -1;
+                this.modals.roadmap = {
+                    show: true, isNew, quarter: q, category: cat, index: idx,
+                    text: isNew ? '' : this.roadmap[q][cat][idx]
+                };
+            },
+            editRoadmapItem(q, cat, idx) { this.openRoadmapModal(q, cat, idx); },
+            saveRoadmapItem() {
+                const { quarter, category, index, isNew, text } = this.modals.roadmap;
+                if (!text.trim()) return;
+                if (isNew) this.roadmap[quarter][category].push(text);
+                else this.roadmap[quarter][category][index] = text;
+                this.modals.roadmap.show = false;
+            },
+            deleteRoadmapItem() {
+                const { quarter, category, index } = this.modals.roadmap;
+                this.roadmap[quarter][category].splice(index, 1);
+                this.modals.roadmap.show = false;
+            },
+
+            // --- Helper: Gap Matrix ---
+            getGapStatusStyle(s) {
+                const map = {
+                    red: 'bg-rose-900/30 text-rose-300 border-rose-500/30',
+                    yellow: 'bg-amber-900/30 text-amber-300 border-amber-500/30',
+                    green: 'bg-emerald-900/30 text-emerald-300 border-emerald-500/30',
+                    star: 'bg-purple-900/30 text-purple-300 border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.3)]'
+                };
+                return map[s];
+            },
+            getGapDotColor(s) {
+                return { red: 'bg-rose-500', yellow: 'bg-amber-500', green: 'bg-emerald-500', star: 'bg-purple-400' }[s];
+            },
+            getGapStatusLabel(s) {
+                return { red: '落后', yellow: '追赶', green: '齐平', star: '超越' }[s];
+            },
+            toggleGapStatus(row, field) {
+                const states = ['red', 'yellow', 'green', 'star'];
+                const current = row[field];
+                const next = states[(states.indexOf(current) + 1) % 4];
+                row[field] = next;
+            },
+            editGapRowName(idx) {
+                this.modals.gap.index = idx;
+                this.modals.gap.text = this.gapMatrix[idx].category;
+                this.modals.gap.show = true;
+            },
+            saveGapRowName() {
+                this.gapMatrix[this.modals.gap.index].category = this.modals.gap.text;
+                this.modals.gap.show = false;
+            },
+
+            // --- Persistence ---
+            exportJSON() {
+                const data = {
+                    projects: this.projects,
+                    roadmap: this.roadmap,
+                    gapMatrix: this.gapMatrix
+                };
+                const str = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+                const anchor = document.createElement('a');
+                anchor.setAttribute("href", str);
+                anchor.setAttribute("download", `WarRoom_Backup_${new Date().toISOString().slice(0,10)}.json`);
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+            },
+            importJSON(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const d = JSON.parse(ev.target.result);
+                        if(d.projects && d.roadmap && d.gapMatrix) {
+                            this.projects = d.projects;
+                            this.roadmap = d.roadmap;
+                            this.gapMatrix = d.gapMatrix;
+                            alert("数据恢复成功！");
+                        } else {
+                            alert("文件格式不正确，缺少核心数据字段。");
+                        }
+                    } catch(err) { alert("JSON 解析失败"); }
+                };
+                reader.readAsText(file);
+            }
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
